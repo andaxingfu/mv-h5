@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#05050c" />
+  <title>光影 · H5 MV</title>
+  <style>
+    :root {
+      --bg: #05050c;
+      --violet: #a78bfa;
+      --violet-deep: #7c3aed;
+      --cyan: #67e8f9;
+      --cyan-soft: #22d3ee;
+      --text: #f5f3ff;
+      --muted: rgba(245, 243, 255, 0.55);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 30%, #12122a 0%, #05050c 70%);
+    }
+
+    /* ===== Canvas 层 ===== */
+    #viz {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: block;
+    }
+
+    /* 胶片颗粒 */
+    #grain {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.07;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      animation: grainShift 0.4s steps(4) infinite;
+    }
+    @keyframes grainShift {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-1%, 1%); }
+      50% { transform: translate(1%, -1%); }
+      75% { transform: translate(-1%, -1%); }
+      100% { transform: translate(0, 0); }
+    }
+
+    /* 暗角 */
+    #vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%);
+    }
+
+    /* ===== 封面层 ===== */
+    #cover {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(24px + var(--safe-top)) 28px calc(40px + var(--safe-bottom));
+      background: radial-gradient(ellipse at 50% 40%, #1a1035 0%, #05050c 75%);
+      transition: opacity 0.7s ease, visibility 0.7s;
+    }
+    #cover.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .cover-orb {
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(124,58,237,0.35) 0%, rgba(34,211,238,0.12) 45%, transparent 70%);
+      filter: blur(8px);
+      animation: orbPulse 4s ease-in-out infinite;
+      z-index: 0;
+    }
+    @keyframes orbPulse {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 1; }
+    }
+
+    .cover-disc {
+      position: relative;
+      z-index: 1;
+      width: min(56vw, 220px);
+      height: min(56vw, 220px);
+      border-radius: 50%;
+      background:
+        conic-gradient(from 0deg, #1e1b4b, #4c1d95, #0e7490, #1e1b4b),
+        radial-gradient(circle at 40% 35%, rgba(255,255,255,0.15), transparent 50%);
+      box-shadow:
+        0 0 0 1px rgba(167,139,250,0.35),
+        0 0 40px rgba(124,58,237,0.4),
+        0 0 80px rgba(34,211,238,0.15),
+        inset 0 0 40px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 36px;
+      animation: discSpin 28s linear infinite;
+      animation-play-state: paused;
+    }
+    #cover.playing .cover-disc { animation-play-state: running; }
+
+    .cover-disc::before {
+      content: "";
+      position: absolute;
+      width: 28%;
+      height: 28%;
+      border-radius: 50%;
+      background: #05050c;
+      box-shadow: inset 0 0 12px rgba(167,139,250,0.3);
+      border: 1px solid rgba(103,232,249,0.25);
+    }
+
+    .cover-title {
+      position: relative;
+      z-index: 1;
+      font-size: clamp(2.4rem, 12vw, 3.2rem);
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      text-indent: 0.35em;
+      background: linear-gradient(135deg, #f5f3ff 0%, var(--violet) 50%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 8px;
+      text-shadow: none;
+    }
+
+    .cover-sub {
+      position: relative;
+      z-index: 1;
+      font-size: 0.8rem;
+      letter-spacing: 0.45em;
+      text-indent: 0.45em;
+      color: var(--muted);
+      margin-bottom: 48px;
+      text-transform: uppercase;
+    }
+
+    .play-btn {
+      position: relative;
+      z-index: 1;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(167,139,250,0.55);
+      background: rgba(124,58,237,0.2);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+      box-shadow: 0 0 24px rgba(124,58,237,0.35);
+    }
+    .play-btn:active { transform: scale(0.94); }
+    .play-btn svg { width: 28px; height: 28px; margin-left: 3px; fill: currentColor; }
+
+    .cover-hint {
+      position: relative;
+      z-index: 1;
+      margin-top: 20px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+    }
+
+    /* ===== MV 控制层 ===== */
+    #hud {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+      padding: calc(16px + var(--safe-top)) 20px calc(20px + var(--safe-bottom));
+    }
+    #hud.visible { opacity: 1; }
+
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      pointer-events: auto;
+    }
+
+    .hud-title {
+      font-size: 1.05rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      text-indent: 0.3em;
+      opacity: 0.9;
+    }
+    .hud-tag {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(0,0,0,0.35);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      transition: background 0.2s;
+    }
+    .icon-btn:active { background: rgba(124,58,237,0.4); }
+    .icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+    .hud-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .center-play {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(10px);
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      opacity: 0;
+      transform: scale(0.9);
+      transition: opacity 0.25s, transform 0.25s;
+    }
+    .center-play.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .center-play svg { width: 26px; height: 26px; fill: currentColor; }
+    .center-play .icon-pause { display: none; }
+    .center-play.paused .icon-play { display: none; }
+    .center-play.paused .icon-pause { display: block; margin-left: 0; }
+    .center-play .icon-play { margin-left: 3px; }
+
+    .hud-bottom {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .time-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-wrap {
+      position: relative;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      touch-action: none;
+    }
+    .progress-track {
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.12);
+      overflow: visible;
+      position: relative;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--violet-deep), var(--cyan-soft));
+      box-shadow: 0 0 10px rgba(103,232,249,0.5);
+      position: relative;
+    }
+    .progress-knob {
+      position: absolute;
+      right: -6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 8px rgba(167,139,250,0.8);
+    }
+
+    /* ===== 结束卡 ===== */
+    #endcard {
+      position: absolute;
+      inset: 0;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(5,5,12,0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s, visibility 0.5s;
+      padding: 24px;
+      text-align: center;
+    }
+    #endcard.show {
+      opacity: 1;
+      visibility: visible;
+    }
+    #endcard h2 {
+      font-size: 1.8rem;
+      font-weight: 300;
+      letter-spacing: 0.4em;
+      text-indent: 0.4em;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff, var(--violet), var(--cyan));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    #endcard p {
+      color: var(--muted);
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      margin-bottom: 32px;
+    }
+    .replay-btn {
+      padding: 14px 36px;
+      border-radius: 999px;
+      border: 1px solid rgba(167,139,250,0.5);
+      background: rgba(124,58,237,0.25);
+      color: var(--text);
+      font-size: 0.9rem;
+      letter-spacing: 0.25em;
+      text-indent: 0.25em;
+      cursor: pointer;
+      min-height: 48px;
+      transition: background 0.2s;
+    }
+    .replay-btn:active { background: rgba(124,58,237,0.45); }
+
+    /* 宽屏居中限制 */
+    @media (min-width: 520px) {
+      #app {
+        max-width: 430px;
+        margin: 0 auto;
+        box-shadow: 0 0 80px rgba(0,0,0,0.6);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="viz"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+
+    <!-- 封面 -->
+    <section id="cover" aria-label="封面">
+      <div class="cover-orb" aria-hidden="true"></div>
+      <div class="cover-disc" aria-hidden="true"></div>
+      <h1 class="cover-title">光影</h1>
+      <p class="cover-sub">H5 · MV</p>
+      <button class="play-btn" id="coverPlay" aria-label="播放">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <p class="cover-hint">轻触开始</p>
+    </section>
+
+    <!-- HUD -->
+    <div id="hud" aria-hidden="true">
+      <div class="hud-top">
+        <div>
+          <div class="hud-title">光影</div>
+          <div class="hud-tag">H5 · MV</div>
+        </div>
+        <button class="icon-btn" id="muteBtn" aria-label="静音">
+          <svg id="iconVol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <svg id="iconMute" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        </button>
+      </div>
+
+      <div class="hud-center">
+        <button class="center-play" id="togglePlay" aria-label="暂停/播放">
+          <svg class="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          <svg class="icon-pause" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="time-row">
+          <span id="curTime">0:00</span>
+          <span id="durTime">0:43</span>
+        </div>
+        <div class="progress-wrap" id="progressWrap" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="进度">
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill">
+              <div class="progress-knob"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 结束卡 -->
+    <section id="endcard" aria-label="播放结束">
+      <h2>光影</h2>
+      <p>片刻已尽 · 再听一次？</p>
+      <button class="replay-btn" id="replayBtn">重新播放</button>
+    </section>
+  </div>
+
+  <audio id="audio" src="song.mp3" preload="auto" playsinline></audio>
+
+  <script>
+  (function () {
+    "use strict";
+
+    // ===== DOM =====
+    const canvas = document.getElementById("viz");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const audio = document.getElementById("audio");
+    const cover = document.getElementById("cover");
+    const coverPlay = document.getElementById("coverPlay");
+    const hud = document.getElementById("hud");
+    const togglePlay = document.getElementById("togglePlay");
+    const muteBtn = document.getElementById("muteBtn");
+    const iconVol = document.getElementById("iconVol");
+    const iconMute = document.getElementById("iconMute");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressFill = document.getElementById("progressFill");
+    const curTimeEl = document.getElementById("curTime");
+    const durTimeEl = document.getElementById("durTime");
+    const endcard = document.getElementById("endcard");
+    const replayBtn = document.getElementById("replayBtn");
+
+    // ===== 状态 =====
+    let started = false;
+    let audioCtx = null;
+    let analyser = null;
+    let freqData = null;
+    let sourceNode = null;
+    let raf = 0;
+    let W = 0, H = 0, dpr = 1;
+    let particles = [];
+    let orbs = [];
+    let energySmooth = 0;
+    let bassSmooth = 0;
+    let showCenterBtn = false;
+    let centerTimer = 0;
+    let seeking = false;
+    let particleBudget = 90;
+
+    // ===== 工具 =====
+    function fmt(t) {
+      if (!isFinite(t)) return "0:00";
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60);
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function resize() {
+      const app = document.getElementById("app");
+      const rect = app.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = rect.width;
+      H = rect.height;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = W + "px";
+      canvas.style.height = H + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // 低端机减粒子
+      particleBudget = W < 400 ? 70 : 100;
+      if (particles.length > particleBudget) particles.length = particleBudget;
+    }
+
+    // ===== 粒子 / 光球 =====
+    function spawnParticle(boost) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = (0.15 + Math.random() * 0.55) * (boost ? 1.8 : 1);
+      return {
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 0.1,
+        r: 0.6 + Math.random() * 2.2,
+        life: 0.4 + Math.random() * 0.6,
+        hue: Math.random() > 0.45 ? 270 : 185, // 紫 / 青
+        a: 0.15 + Math.random() * 0.55
+      };
+    }
+
+    function initOrbs() {
+      orbs = [];
+      for (let i = 0; i < 5; i++) {
+        orbs.push({
+          x: W * (0.2 + Math.random() * 0.6),
+          y: H * (0.2 + Math.random() * 0.5),
+          r: 60 + Math.random() * 100,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.0004 + Math.random() * 0.0006,
+          hue: i % 2 === 0 ? 265 : 190
+        });
+      }
+    }
+
+    function initParticles() {
+      particles = [];
+      for (let i = 0; i < particleBudget; i++) particles.push(spawnParticle(false));
+    }
+
+    // ===== Web Audio =====
+    function setupAudio() {
+      if (audioCtx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.82;
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+      sourceNode = audioCtx.createMediaElementSource(audio);
+      sourceNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+    }
+
+    function readEnergy() {
+      if (!analyser) return { energy: 0, bass: 0 };
+      analyser.getByteFrequencyData(freqData);
+      let sum = 0, bass = 0;
+      const n = freqData.length;
+      const bassN = Math.min(8, n);
+      for (let i = 0; i < n; i++) sum += freqData[i];
+      for (let i = 0; i < bassN; i++) bass += freqData[i];
+      return {
+        energy: (sum / n) / 255,
+        bass: (bass / bassN) / 255
+      };
+    }
+
+    // ===== 绘制 =====
+    function drawAurora(t, energy, bass) {
+      // 背景
+      ctx.fillStyle = "#05050c";
+      ctx.fillRect(0, 0, W, H);
+
+      // 柔和极光带
+      const bands = 3;
+      for (let i = 0; i < bands; i++) {
+        const y = H * (0.25 + i * 0.18) + Math.sin(t * 0.0003 + i) * 30 * (1 + energy);
+        const grad = ctx.createLinearGradient(0, y - 80, 0, y + 80);
+        const alpha = 0.04 + energy * 0.12 + bass * 0.06;
+        if (i % 2 === 0) {
+          grad.addColorStop(0, "rgba(124,58,237,0)");
+          grad.addColorStop(0.5, "rgba(167,139,250," + alpha + ")");
+          grad.addColorStop(1, "rgba(124,58,237,0)");
+        } else {
+          grad.addColorStop(0, "rgba(34,211,238,0)");
+          grad.addColorStop(0.5, "rgba(103,232,249," + alpha + ")");
+          grad.addColorStop(1, "rgba(34,211,238,0)");
+        }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= W; x += 12) {
+          const wave = Math.sin(x * 0.008 + t * 0.0008 + i * 1.5) * (18 + energy * 40)
+            + Math.sin(x * 0.02 + t * 0.0012) * (8 + bass * 20);
+          ctx.lineTo(x, y + wave);
+        }
+        ctx.lineTo(W, y + 120);
+        ctx.lineTo(0, y + 120);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 浮动光球
+      for (const o of orbs) {
+        o.phase += o.speed * (1 + energy * 2);
+        const ox = o.x + Math.cos(o.phase) * 40;
+        const oy = o.y + Math.sin(o.phase * 0.7) * 30;
+        const r = o.r * (1 + bass * 0.35);
+        const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+        const a = 0.08 + energy * 0.18;
+        g.addColorStop(0, "hsla(" + o.hue + ",80%,70%," + a + ")");
+        g.addColorStop(0.5, "hsla(" + o.hue + ",70%,50%," + (a * 0.35) + ")");
+        g.addColorStop(1, "hsla(" + o.hue + ",70%,40%,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(ox, oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function updateParticles(energy, bass) {
+      const boost = energy > 0.12;
+      // 能量高时补充粒子
+      while (particles.length < particleBudget) particles.push(spawnParticle(boost));
+      if (boost && particles.length < particleBudget + 20) {
+        particles.push(spawnParticle(true));
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * (1 + energy * 2);
+        p.y += p.vy * (1 + energy * 2) - bass * 0.3;
+        p.life -= 0.0025 + energy * 0.004;
+        if (p.life <= 0 || p.x < -20 || p.x > W + 20 || p.y < -20 || p.y > H + 20) {
+          particles[i] = spawnParticle(boost);
+          continue;
+        }
+        const alpha = p.a * p.life * (0.5 + energy);
+        ctx.beginPath();
+        ctx.fillStyle = "hsla(" + p.hue + ",85%,75%," + Math.min(1, alpha) + ")";
+        ctx.arc(p.x, p.y, p.r * (1 + bass * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 节流
+      if (particles.length > particleBudget + 30) particles.length = particleBudget + 10;
+    }
+
+    function drawCenterPulse(energy, bass) {
+      const cx = W / 2;
+      const cy = H * 0.42;
+      const baseR = Math.min(W, H) * 0.12;
+      const r = baseR * (1 + bass * 0.55 + energy * 0.25);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
+      g.addColorStop(0, "rgba(167,139,250," + (0.12 + energy * 0.25) + ")");
+      g.addColorStop(0.4, "rgba(103,232,249," + (0.06 + bass * 0.12) + ")");
+      g.addColorStop(1, "rgba(5,5,12,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 细环
+      ctx.strokeStyle = "rgba(245,243,255," + (0.15 + energy * 0.35) + ")";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(103,232,249," + (0.1 + bass * 0.4) + ")";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawSpectrumRing(energy) {
+      if (!freqData) return;
+      const cx = W / 2;
+      const cy = H * 0.42;
+      const baseR = Math.min(W, H) * 0.18;
+      const bars = 48;
+      const step = Math.floor(freqData.length / bars);
+      ctx.save();
+      for (let i = 0; i < bars; i++) {
+        const v = freqData[i * step] / 255;
+        const ang = (i / bars) * Math.PI * 2 - Math.PI / 2;
+        const len = 8 + v * 42 * (0.6 + energy);
+        const x1 = cx + Math.cos(ang) * baseR;
+        const y1 = cy + Math.sin(ang) * baseR;
+        const x2 = cx + Math.cos(ang) * (baseR + len);
+        const y2 = cy + Math.sin(ang) * (baseR + len);
+        ctx.strokeStyle = i % 2 === 0
+          ? "rgba(167,139,250," + (0.25 + v * 0.55) + ")"
+          : "rgba(103,232,249," + (0.2 + v * 0.5) + ")";
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    let lastT = 0;
+    function frame(t) {
+      raf = requestAnimationFrame(frame);
+      // 简单帧率节流：目标 ~60，低端可跳帧
+      if (t - lastT < 14) { /* 允许约 60fps */ }
+      lastT = t;
+
+      const { energy, bass } = readEnergy();
+      energySmooth += (energy - energySmooth) * 0.12;
+      bassSmooth += (bass - bassSmooth) * 0.15;
+
+      drawAurora(t, energySmooth, bassSmooth);
+      drawCenterPulse(energySmooth, bassSmooth);
+      if (!audio.paused) drawSpectrumRing(energySmooth);
+      updateParticles(energySmooth, bassSmooth);
+
+      if (!seeking && started) updateProgressUI();
+    }
+
+    function updateProgressUI() {
+      const d = audio.duration || 43.65;
+      const c = audio.currentTime || 0;
+      const pct = Math.min(100, (c / d) * 100);
+      progressFill.style.width = pct + "%";
+      progressWrap.setAttribute("aria-valuenow", Math.round(pct));
+      curTimeEl.textContent = fmt(c);
+      durTimeEl.textContent = fmt(d);
+    }
+
+    // ===== 交互 =====
+    async function startExperience() {
+      if (started) {
+        if (audio.paused) await audio.play();
+        return;
+      }
+      started = true;
+      setupAudio();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+
+      cover.classList.add("playing");
+      try {
+        await audio.play();
+      } catch (e) {
+        console.warn("play failed", e);
+        // 再试一次：部分环境需先 resume 再 play
+        try {
+          if (audioCtx && audioCtx.state === "suspended") await audioCtx.resume();
+          await audio.play();
+        } catch (e2) {
+          console.warn("play retry failed", e2);
+        }
+      }
+
+      cover.classList.add("hidden");
+      hud.classList.add("visible");
+      hud.setAttribute("aria-hidden", "false");
+      hudReadyAt = Date.now() + 400;
+      endcard.classList.remove("show");
+      resize();
+      initOrbs();
+      initParticles();
+      // 封面循环占用了 raf，必须取消后切到正式 MV 帧循环
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(frame);
+      updateProgressUI();
+      togglePlay.classList.remove("paused", "show");
+    }
+
+    function togglePlayback() {
+      if (!started) return startExperience();
+      if (audio.paused) {
+        audio.play();
+        togglePlay.classList.remove("paused");
+        endcard.classList.remove("show");
+      } else {
+        audio.pause();
+        togglePlay.classList.add("paused");
+      }
+      flashCenter();
+    }
+
+    function flashCenter() {
+      togglePlay.classList.add("show");
+      if (audio.paused) togglePlay.classList.add("paused");
+      else togglePlay.classList.remove("paused");
+      clearTimeout(centerTimer);
+      if (!audio.paused) {
+        centerTimer = setTimeout(function () {
+          togglePlay.classList.remove("show");
+        }, 1200);
+      }
+    }
+
+    function setMuted(m) {
+      audio.muted = m;
+      iconVol.style.display = m ? "none" : "block";
+      iconMute.style.display = m ? "block" : "none";
+    }
+
+    function seekFromEvent(e) {
+      const rect = progressWrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      let ratio = (clientX - rect.left) / rect.width;
+      ratio = Math.max(0, Math.min(1, ratio));
+      const d = audio.duration || 43.65;
+      audio.currentTime = ratio * d;
+      updateProgressUI();
+    }
+
+    // 事件绑定
+    coverPlay.addEventListener("click", function (e) {
+      e.stopPropagation();
+      startExperience();
+    });
+    cover.addEventListener("click", function (e) {
+      if (e.target.closest(".play-btn")) return;
+      startExperience();
+    });
+
+    togglePlay.addEventListener("click", function (e) {
+      e.stopPropagation();
+      togglePlayback();
+    });
+
+    let hudReadyAt = 0;
+    // 点击画面中央区域也可暂停/播放（开场后短暂忽略，避免点透）
+    hud.addEventListener("click", function (e) {
+      if (Date.now() < hudReadyAt) return;
+      if (e.target.closest(".icon-btn") || e.target.closest(".progress-wrap") || e.target.closest(".center-play")) return;
+      togglePlayback();
+    });
+
+    muteBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      setMuted(!audio.muted);
+    });
+
+    replayBtn.addEventListener("click", function () {
+      endcard.classList.remove("show");
+      audio.currentTime = 0;
+      audio.play();
+      togglePlay.classList.remove("paused", "show");
+    });
+
+    audio.addEventListener("ended", function () {
+      endcard.classList.add("show");
+      togglePlay.classList.add("paused", "show");
+    });
+
+    audio.addEventListener("loadedmetadata", function () {
+      durTimeEl.textContent = fmt(audio.duration);
+    });
+    if (audio.readyState >= 1) durTimeEl.textContent = fmt(audio.duration);
+
+    // 进度拖拽
+    progressWrap.addEventListener("pointerdown", function (e) {
+      seeking = true;
+      progressWrap.setPointerCapture(e.pointerId);
+      seekFromEvent(e);
+    });
+    progressWrap.addEventListener("pointermove", function (e) {
+      if (!seeking) return;
+      seekFromEvent(e);
+    });
+    progressWrap.addEventListener("pointerup", function () { seeking = false; });
+    progressWrap.addEventListener("pointercancel", function () { seeking = false; });
+
+    window.addEventListener("resize", function () {
+      resize();
+      if (started) { initOrbs(); }
+    });
+    window.addEventListener("orientationchange", function () {
+      setTimeout(resize, 200);
+    });
+
+    // 初始静态背景一帧（封面下也有微光）
+    resize();
+    initOrbs();
+    initParticles();
+    // 封面阶段低能耗预览动画
+    function coverLoop(t) {
+      if (started) return;
+      energySmooth = 0.04 + Math.sin(t * 0.001) * 0.02;
+      bassSmooth = 0.03;
+      drawAurora(t, energySmooth, bassSmooth);
+      updateParticles(0.05, 0.03);
+      raf = requestAnimationFrame(coverLoop);
+    }
+    raf = requestAnimationFrame(coverLoop);
+  })();
+  </script>
+</body>
+</html>
